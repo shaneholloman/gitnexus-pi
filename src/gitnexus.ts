@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import { resolve, sep, basename, extname, join } from 'path';
+import { posix, resolve, relative, sep, basename, extname, join } from 'path';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { homedir } from 'os';
 
@@ -16,8 +16,7 @@ export function updateSpawnEnv(env: NodeJS.ProcessEnv): void { spawnEnv = env; }
 
 /**
  * Resolved command prefix for invoking gitnexus.
- * Set to ['gitnexus'] when the binary is on PATH, otherwise ['npx', '-y', 'gitnexus@latest'].
- * Updated by setGitnexusCmd() during session_start probe.
+ * Defaults to ['gitnexus']; session_start may override it from the flag or saved config.
  */
 export let gitnexusCmd: string[] = ['gitnexus'];
 export function setGitnexusCmd(cmd: string[]): void { gitnexusCmd = cmd; }
@@ -43,39 +42,58 @@ export function saveConfig(config: GitNexusConfig): void {
   } catch { /* ignore write errors */ }
 }
 
+export function resolveGitNexusCmd(flag: string | undefined, saved: string | undefined): string[] {
+  const cmd = flag?.trim() || saved?.trim() || 'gitnexus';
+  return cmd.split(/\s+/);
+}
+
+export function normalizePathArg(path: string): string {
+  return path.startsWith('@') ? path.slice(1) : path;
+}
+
+export function expandUserPath(path: string): string {
+  return path === '~' || path.startsWith('~/')
+    ? join(homedir(), path.slice(2))
+    : path;
+}
+
 /** Augment subprocess timeout in ms. Applied via setTimeout + proc.kill('SIGTERM') — spawn has no built-in timeout. */
 const AUGMENT_TIMEOUT = 8_000;
 
-/** Per-cwd cache: true = index found, false = not found. Invalidated on session_switch. */
-const indexCache = new Map<string, boolean>();
+/** Per-cwd cache: resolved repo root with .gitnexus, or null if none found. */
+const indexRootCache = new Map<string, string | null>();
 
-/** Walk up to 5 ancestors looking for a .gitnexus/ directory. Result is cached per cwd. */
-export function findGitNexusIndex(cwd: string): boolean {
-  if (indexCache.has(cwd)) return indexCache.get(cwd)!;
+/** Walk up ancestors looking for a .gitnexus/ directory. Result is cached per cwd. */
+export function findGitNexusRoot(cwd: string): string | null {
+  if (indexRootCache.has(cwd)) return indexRootCache.get(cwd)!;
   let dir = cwd;
-  for (let i = 0; i < 5; i++) {
+  while (true) {
     if (existsSync(resolve(dir, '.gitnexus'))) {
-      indexCache.set(cwd, true);
-      return true;
+      indexRootCache.set(cwd, dir);
+      return dir;
     }
     const parent = resolve(dir, '..');
     if (parent === dir) break;
     dir = parent;
   }
-  indexCache.set(cwd, false);
-  return false;
+  indexRootCache.set(cwd, null);
+  return null;
+}
+
+export function findGitNexusIndex(cwd: string): boolean {
+  return findGitNexusRoot(cwd) != null;
 }
 
 /** Clear the index cache. Call on session_switch when cwd may have changed. */
 export function clearIndexCache(): void {
-  indexCache.clear();
+  indexRootCache.clear();
 }
 
 /** File extensions worth augmenting when the agent reads a file. */
 const CODE_EXTENSIONS = new Set([
   '.sol', '.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rs', '.java',
   '.kt', '.swift', '.c', '.cpp', '.h', '.hpp', '.cs', '.rb', '.php',
-  '.vy', '.fe', '.huff',
+  '.vy', '.fe', '.huff', '.md', '.mdx',
 ]);
 
 /**
@@ -232,6 +250,19 @@ export function extractFilePatternsFromContent(
 export function safeResolvePath(file: string, cwd: string): string | null {
   const resolved = resolve(cwd, file);
   return resolved.startsWith(cwd + sep) || resolved === cwd ? resolved : null;
+}
+
+export function toRepoRelativePath(file: string, repoRoot: string): string | null {
+  const resolved = safeResolvePath(file, repoRoot);
+  if (!resolved) return null;
+  return relative(repoRoot, resolved) || '.';
+}
+
+export function validateRepoRelativePath(file: string): string | null {
+  const normalized = posix.normalize(file.replaceAll('\\', '/'));
+  if (normalized === '.' || normalized === '') return null;
+  if (normalized.startsWith('../') || normalized === '..' || normalized.startsWith('/')) return null;
+  return normalized;
 }
 
 /**

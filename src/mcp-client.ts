@@ -118,36 +118,50 @@ class GitNexusMcpClient {
   /**
    * Call a gitnexus MCP tool and return its formatted text response.
    * Starts the MCP process lazily if not already running.
-   * Returns "" on any error (graceful failure, same as the augment hook).
+   * Throws on transport/MCP failures so pi marks the tool call as an error.
    */
   async callTool(name: string, args: Record<string, unknown>, cwd: string): Promise<string> {
     try {
       await this.ensureStarted(cwd);
-    } catch {
-      return '';
+    } catch (error) {
+      throw this.createError(error, 'Failed to start gitnexus mcp');
     }
 
-    if (!this.proc) return '';
+    if (!this.proc) throw new Error('GitNexus MCP is not running.');
 
     const id = this.nextId++;
-    return new Promise<string>((resolve_) => {
+    return new Promise<string>((resolve_, reject_) => {
       this.pending.set(id, {
         resolve: (raw: string) => {
           try {
             const msg = JSON.parse(raw) as JsonRpcResponse;
-            if (msg.error) { resolve_(''); return; }
+            if (msg.error) {
+              reject_(this.createError(msg.error.message));
+              return;
+            }
             const result = msg.result as McpToolResult | undefined;
-            if (!result?.content || result.isError) { resolve_(''); return; }
+            if (!result?.content) {
+              reject_(this.createError('No response content returned from GitNexus MCP.'));
+              return;
+            }
             const text = result.content
-              .filter((c) => c.type === 'text' && !c.isError && c.text)
+              .filter((c) => c.type === 'text' && c.text)
               .map((c) => c.text!)
               .join('\n');
+            if (result.isError) {
+              reject_(this.createError(text || 'GitNexus MCP reported an error with no text payload.'));
+              return;
+            }
+            if (!text) {
+              reject_(this.createError('GitNexus MCP returned an empty response.'));
+              return;
+            }
             resolve_('[GitNexus]\n' + text.slice(0, MAX_OUTPUT_CHARS));
-          } catch {
-            resolve_('');
+          } catch (error) {
+            reject_(this.createError(error, 'Malformed response from GitNexus MCP.'));
           }
         },
-        reject: () => resolve_(''),
+        reject: (error) => reject_(this.createError(error, 'GitNexus MCP request failed.')),
       });
 
       const msg = JSON.stringify({
@@ -159,11 +173,16 @@ class GitNexusMcpClient {
 
       try {
         this.proc!.stdin!.write(msg + '\n');
-      } catch {
+      } catch (error) {
         this.pending.delete(id);
-        resolve_('');
+        reject_(this.createError(error, 'Failed to write request to GitNexus MCP.'));
       }
     });
+  }
+
+  private createError(error: unknown, fallback = 'GitNexus MCP request failed.'): Error {
+    const message = error instanceof Error ? error.message : typeof error === 'string' ? error : fallback;
+    return new Error(`[GitNexus] ${message || fallback}`);
   }
 
   /** Terminate the MCP process. Called on session_switch so the next session gets a fresh process. */
