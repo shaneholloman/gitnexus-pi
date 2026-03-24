@@ -1,6 +1,6 @@
 import { spawn } from 'child_process';
 import type { ExtensionAPI, ExtensionContext } from '@mariozechner/pi-coding-agent';
-import { findGitNexusIndex, clearIndexCache, extractPattern, extractFilePatternsFromContent, extractFilesFromReadMany, runAugment, spawnEnv, updateSpawnEnv, gitnexusCmd, setGitnexusCmd, loadSavedConfig, saveConfig } from './gitnexus';
+import { findGitNexusIndex, findGitNexusRoot, clearIndexCache, extractPattern, extractFilePatternsFromContent, extractFilesFromReadMany, runAugment, spawnEnv, updateSpawnEnv, gitnexusCmd, setGitnexusCmd, loadSavedConfig, saveConfig, resolveGitNexusCmd } from './gitnexus';
 import { mcpClient } from './mcp-client';
 import { registerTools } from './tools';
 
@@ -8,12 +8,11 @@ const SEARCH_TOOLS = new Set(['grep', 'find', 'bash', 'read', 'read_many']);
 
 /** Resolve PATH from a login shell so nvm/fnm/volta binaries are visible. */
 async function resolveShellPath(): Promise<void> {
-  const shell = process.env.SHELL ?? '/bin/sh';
   const path = await new Promise<string>((resolve_) => {
     let out = '';
-    const proc = spawn(shell, ['-lc', 'echo $PATH'], { stdio: ['ignore', 'pipe', 'ignore'] });
+    const proc = spawn('/bin/sh', ['-lc', 'printf %s "$PATH"'], { stdio: ['ignore', 'pipe', 'ignore'] });
     proc.stdout.on('data', (d: { toString(): string }) => { out += d.toString(); });
-    proc.on('close', () => resolve_(out.trim()));
+    proc.on('close', () => resolve_(out.trim() || (process.env.PATH ?? '')));
     proc.on('error', () => resolve_(process.env.PATH ?? ''));
   });
   updateSpawnEnv({ ...process.env, PATH: path });
@@ -59,8 +58,8 @@ export default function(pi: ExtensionAPI) {
 
   pi.registerFlag('gitnexus-cmd', {
     type: 'string',
-    default: 'gitnexus',
-    description: 'Command used to invoke gitnexus, e.g. "npx gitnexus@latest"',
+    default: '',
+    description: 'Command used to invoke gitnexus, e.g. "npx gitnexus@latest". Empty uses saved config or plain "gitnexus".',
   });
 
   // Append a one-liner so the agent understands graph context in search results.
@@ -72,7 +71,7 @@ export default function(pi: ExtensionAPI) {
         event.systemPrompt +
         '\n\n[GitNexus active] Graph context will appear after search results. ' +
         'Use gitnexus_query, gitnexus_context, gitnexus_impact, gitnexus_detect_changes, ' +
-        'gitnexus_list_repos for deeper analysis of call chains and execution flows. ' +
+        'gitnexus_list_repos, gitnexus_rename, and gitnexus_cypher for deeper analysis of call chains and execution flows. ' +
         'If the index is stale after code changes, run /gitnexus analyze to rebuild it.',
     };
   });
@@ -150,8 +149,7 @@ export default function(pi: ExtensionAPI) {
     // Resolve command: default → saved config → CLI flag (highest precedence)
     const saved = loadSavedConfig().cmd;
     const flag = pi.getFlag('gitnexus-cmd') as string | undefined;
-    const cmdStr = flag ?? saved ?? 'gitnexus';
-    setGitnexusCmd(cmdStr.trim().split(/\s+/));
+    setGitnexusCmd(resolveGitNexusCmd(flag, saved));
 
     binaryAvailable = await probeGitNexusBinary();
     if (!findGitNexusIndex(ctx.cwd)) return;
@@ -225,7 +223,8 @@ export default function(pi: ExtensionAPI) {
           '\n' +
           'Tools (always available to the agent):\n' +
           '  gitnexus_list_repos, gitnexus_query, gitnexus_context,\n' +
-          '  gitnexus_impact, gitnexus_detect_changes',
+          '  gitnexus_impact, gitnexus_detect_changes,\n' +
+          '  gitnexus_rename, gitnexus_cypher',
           'info',
         );
         return;
@@ -280,30 +279,44 @@ export default function(pi: ExtensionAPI) {
         return;
       }
 
+      const repo = findGitNexusRoot(ctx.cwd) ?? ctx.cwd;
+
       // /gitnexus query <text>
       if (sub === 'query') {
         if (!rest) { ctx.ui.notify('Usage: /gitnexus query <text>', 'info'); return; }
-        const out = await mcpClient.callTool('query', { query: rest }, ctx.cwd);
-        if (out) pi.sendUserMessage(out, { deliverAs: 'followUp' });
-        else ctx.ui.notify('No results.', 'info');
+        try {
+          const out = await mcpClient.callTool('query', { query: rest, repo }, ctx.cwd);
+          if (out) pi.sendUserMessage(out, { deliverAs: 'followUp' });
+          else ctx.ui.notify('No results.', 'info');
+        } catch (error) {
+          ctx.ui.notify(error instanceof Error ? error.message : 'GitNexus query failed.', 'error');
+        }
         return;
       }
 
       // /gitnexus context <name>
       if (sub === 'context') {
         if (!rest) { ctx.ui.notify('Usage: /gitnexus context <name>', 'info'); return; }
-        const out = await mcpClient.callTool('context', { name: rest }, ctx.cwd);
-        if (out) pi.sendUserMessage(out, { deliverAs: 'followUp' });
-        else ctx.ui.notify('No results.', 'info');
+        try {
+          const out = await mcpClient.callTool('context', { name: rest, repo }, ctx.cwd);
+          if (out) pi.sendUserMessage(out, { deliverAs: 'followUp' });
+          else ctx.ui.notify('No results.', 'info');
+        } catch (error) {
+          ctx.ui.notify(error instanceof Error ? error.message : 'GitNexus context lookup failed.', 'error');
+        }
         return;
       }
 
       // /gitnexus impact <name>
       if (sub === 'impact') {
         if (!rest) { ctx.ui.notify('Usage: /gitnexus impact <name>', 'info'); return; }
-        const out = await mcpClient.callTool('impact', { target: rest, direction: 'upstream' }, ctx.cwd);
-        if (out) pi.sendUserMessage(out, { deliverAs: 'followUp' });
-        else ctx.ui.notify('No results.', 'info');
+        try {
+          const out = await mcpClient.callTool('impact', { target: rest, direction: 'upstream', repo }, ctx.cwd);
+          if (out) pi.sendUserMessage(out, { deliverAs: 'followUp' });
+          else ctx.ui.notify('No results.', 'info');
+        } catch (error) {
+          ctx.ui.notify(error instanceof Error ? error.message : 'GitNexus impact analysis failed.', 'error');
+        }
         return;
       }
 

@@ -32,7 +32,7 @@ Agent calls read_many([api.ts, db.ts, router.ts])
       <call graph context for db>
 ```
 
-Five tools are also registered directly in pi — the agent can use them explicitly for deeper analysis without any setup.
+Seven tools are also registered directly in pi — the agent can use them explicitly for deeper analysis without any setup.
 
 ## Requirements
 
@@ -58,8 +58,8 @@ The extension never installs anything automatically. It assumes `gitnexus` is on
 | `bash` with cat/head/tail | Filename of the target file |
 | `bash` with find | Value of `-name`/`-iname` |
 | `find` | Glob pattern basename |
-| `read` | Filename of the file being read (code files only) |
-| `read_many` | Each code file in the batch (up to 5), labeled per-file in output |
+| `read` | Filename of the file being read (indexed code/docs files only) |
+| `read_many` | Each indexed code/docs file in the batch (up to 5), labeled per-file in output |
 | Any grep/bash result | Filenames extracted from result lines (`path/file.ts:line:`) |
 
 Each tool result augments up to 3 patterns in parallel (up to 5 for `read_many`). Patterns already augmented this session are skipped.
@@ -88,7 +88,9 @@ The following tools are registered in pi and always available to the agent:
 | `gitnexus_query` | Search the knowledge graph for execution flows |
 | `gitnexus_context` | 360° view of a symbol: callers, callees, processes |
 | `gitnexus_impact` | Blast radius analysis for a symbol |
-| `gitnexus_detect_changes` | Map a git diff to affected execution flows |
+| `gitnexus_detect_changes` | Analyze staged/unstaged/all/compare git changes and affected execution flows |
+| `gitnexus_rename` | Coordinated multi-file rename preview/apply through the knowledge graph |
+| `gitnexus_cypher` | Execute raw Cypher queries against the graph |
 
 ## How it works
 
@@ -96,9 +98,9 @@ The following tools are registered in pi and always available to the agent:
 
 **Session dedup cache** — each symbol or filename is augmented at most once per session. Prevents redundant lookups when the agent repeatedly searches for the same thing.
 
-**MCP client** — tools (query, context, impact, detect_changes, list_repos) communicate with `gitnexus mcp` over a stdio pipe. The process is spawned lazily on the first tool call and kept alive for the session. No network socket, no port.
+**MCP client** — tools (list_repos, query, context, impact, detect_changes, rename, cypher) communicate with `gitnexus mcp` over a stdio pipe. The process is spawned lazily on the first tool call and kept alive for the session. No network socket, no port.
 
-**Session lifecycle** — on session start/switch, the extension resolves the full shell PATH (picking up nvm/fnm/volta), probes the binary, checks for an index, and notifies accordingly. The MCP process is restarted with the new working directory.
+**Session lifecycle** — on session start/switch, the extension resolves the full shell PATH through `/bin/sh` (picking up nvm/fnm/volta without depending on a user shell like nushell), probes the binary, checks for an index, and notifies accordingly. The MCP process is restarted with the new working directory.
 
 **Auto-augment toggle** — `/gitnexus off` disables the hook without affecting tools. Useful when the graph output is noisy for a particular task. Resets to enabled on session switch.
 
@@ -112,6 +114,8 @@ This extension (pi-gitnexus) is MIT licensed. [GitNexus](https://github.com/abhi
 
 - The extension never runs `gitnexus analyze` automatically — indexing is always user-initiated via `/gitnexus analyze`.
 - The index is a static snapshot. Re-run `/gitnexus analyze` after significant code changes. The agent will suggest this when the index appears stale.
-- `gitnexus_detect_changes` is a lightweight alternative: pass `git diff HEAD` output to see affected flows without a full reindex.
-- `gitnexus_cypher` and `gitnexus_rename` are intentionally not exposed (raw graph access and automated multi-file rename).
+- In multi-repo GitNexus setups the extension automatically passes the current repo root path to MCP tools, but every tool also accepts an explicit `repo` override.
+- `gitnexus_detect_changes` follows the current MCP API: use `scope` (`unstaged`, `staged`, `all`, or `compare`) and optional `base_ref` instead of pasting raw diffs.
+- Markdown files (`.md`, `.mdx`) participate in augmentation alongside code files when GitNexus has indexed them.
+- `gitnexus_rename` and `gitnexus_cypher` are exposed intentionally; use `gitnexus_rename` with `dry_run` first because it can propose multi-file edits.
 - The enrichment is appended to the tool result the agent receives — files on disk and raw tool outputs are never modified.
