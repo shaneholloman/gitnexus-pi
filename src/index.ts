@@ -75,7 +75,7 @@ export default function(pi: ExtensionAPI) {
         event.systemPrompt +
         '\n\n[GitNexus active] Graph context will appear after search results. ' +
         'Use gitnexus_query, gitnexus_context, gitnexus_impact, gitnexus_detect_changes, ' +
-        'gitnexus_list_repos, gitnexus_rename, and gitnexus_cypher for deeper analysis of call chains and execution flows. ' +
+        'gitnexus_list_repos, gitnexus_rename, and gitnexus_cypher for deeper analysis. ' +
         'If the index is stale after code changes, run /gitnexus analyze to rebuild it.',
     };
   });

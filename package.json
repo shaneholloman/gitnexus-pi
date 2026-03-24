@@ -49,6 +49,9 @@
     "extensions": [
       "./src/index.ts"
     ],
+    "skills": [
+      "./skills"
+    ],
     "image": "https://github.com/tintinweb/pi-gitnexus/raw/master/media/screenshot.png"
   }
 }
