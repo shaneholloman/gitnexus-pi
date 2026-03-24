@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.0
+
+- **Interactive menu** — `/gitnexus` opens a menu with status display, Analyze, Settings, and Help. Status is shown inline in the menu title. `/gitnexus status` and `/gitnexus analyze` still work as direct shortcuts.
+- **Settings panel** — `/gitnexus settings` opens a native TUI settings panel (SettingsList) for auto-augment, timeout, max augments per result, secondary pattern limit, and gitnexus command. All settings persist to `~/.pi/pi-gitnexus.json` and apply immediately.
+- **Subcommand autocomplete** — typing `/gitnexus ` now autocompletes subcommands (status, analyze, on, off, settings, query, context, impact, help).
+- **Skills** — 5 workflow skills bundled with the extension, available via `/skill:name`:
+  - `gitnexus-exploring` — understand architecture, trace execution flows
+  - `gitnexus-debugging` — trace bugs, find error sources
+  - `gitnexus-pr-review` — review PRs with blast radius analysis
+  - `gitnexus-refactoring` — safe rename, extract, split operations
+  - `gitnexus-impact-analysis` — pre-change safety analysis
+- **Configurable limits** — max augments per result and secondary pattern limit are now settings instead of hardcoded values.
+
 ## 0.4.1
 
 - **Settings menu cleanup** — removed duplicate auto-augment toggle. Previously, `/gitnexus settings` showed an auto-augment toggle in the top-level menu *and* inside the Settings panel. The top-level toggle is removed; auto-augment is now configured only in the Settings panel alongside timeout and limit options.

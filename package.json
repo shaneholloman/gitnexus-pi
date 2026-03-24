@@ -1,6 +1,6 @@
 {
   "name": "pi-gitnexus",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "GitNexus knowledge graph integration for pi — enriches searches with call chains, execution flows, and blast radius",
   "author": "tintinweb",
   "license": "MIT",
@@ -43,7 +43,7 @@
     "@sinclair/typebox": "latest",
     "@types/node": "^25.3.0",
     "typescript": "^6.0.2",
-    "vitest": "^2.1.9"
+    "vitest": "^4.1.1"
   },
   "pi": {
     "extensions": [

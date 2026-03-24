@@ -39,7 +39,7 @@ Seven tools are also registered directly in pi — the agent can use them explic
 - [gitnexus](https://github.com/abhigyanpatwari/GitNexus) available as `gitnexus` on PATH (e.g. `npm i -g gitnexus`)
 - A GitNexus index in your project: run `/gitnexus analyze`
 
-The extension never installs anything automatically. It assumes `gitnexus` is on PATH. If your setup differs, use `/gitnexus config` to set a custom command (e.g. `npx gitnexus@latest`).
+The extension never installs anything automatically. It assumes `gitnexus` is on PATH. If your setup differs, use `/gitnexus settings` to set a custom command (e.g. `npx gitnexus@latest`).
 
 ## Getting started
 
@@ -68,7 +68,7 @@ Each tool result augments up to 3 patterns in parallel (up to 5 for `read_many`)
 
 | Command | Description |
 |---|---|
-| `/gitnexus` | Open the main menu (Status, Settings) |
+| `/gitnexus` | Open the main menu (status, Analyze, Settings, Help) |
 | `/gitnexus status` | Show index status and session enrichment count |
 | `/gitnexus analyze` | Build or rebuild the knowledge graph |
 | `/gitnexus on` / `/gitnexus off` | Enable/disable auto-augment (tools unaffected) |
@@ -92,6 +92,20 @@ The following tools are registered in pi and always available to the agent:
 | `gitnexus_detect_changes` | Analyze staged/unstaged/all/compare git changes and affected execution flows |
 | `gitnexus_rename` | Coordinated multi-file rename preview/apply through the knowledge graph |
 | `gitnexus_cypher` | Execute raw Cypher queries against the graph |
+
+## Skills
+
+The extension bundles 5 workflow skills that guide the agent through common tasks:
+
+| Skill | When to use |
+|---|---|
+| `/skill:gitnexus-exploring` | Understand architecture, trace execution flows, explore unfamiliar code |
+| `/skill:gitnexus-debugging` | Debug a bug, trace an error, find why something fails |
+| `/skill:gitnexus-pr-review` | Review a PR, assess merge risk, check blast radius |
+| `/skill:gitnexus-refactoring` | Rename, extract, split, or restructure code safely |
+| `/skill:gitnexus-impact-analysis` | Know what breaks before changing something |
+
+Skills are loaded on-demand — only the description is in context until the agent or user invokes one.
 
 ## How it works
 
