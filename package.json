@@ -32,8 +32,9 @@
     "lint:fix": "biome check --fix src/"
   },
   "peerDependencies": {
-    "@mariozechner/pi-ai": ">=0.70",
-    "@mariozechner/pi-coding-agent": ">=0.70",
+    "@earendil-works/pi-ai": ">=0.74",
+    "@earendil-works/pi-coding-agent": ">=0.74",
+    "@earendil-works/pi-tui": ">=0.74",
     "typebox": ">=1.0"
   },
   "dependencies": {
@@ -41,11 +42,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.14",
-    "@mariozechner/pi-ai": "^0.72.1",
-    "@mariozechner/pi-coding-agent": "^0.72.1",
     "@types/cross-spawn": "6.0.6",
-    "@types/node": "^25.6.0",
-    "typebox": "^1.1.37",
+    "@types/node": "^25.6.2",
     "typescript": "^6.0.3",
     "vitest": "^4.1.5"
   },

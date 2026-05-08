@@ -1,5 +1,5 @@
 import { delimiter } from 'node:path';
-import type { ExtensionAPI, ExtensionContext } from '@mariozechner/pi-coding-agent';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import spawn from 'cross-spawn';
 import { clearIndexCache, extractFilePatternsFromContent, extractFilesFromReadMany, extractPattern, findGitNexusIndex, findGitNexusRoot, type GitNexusConfig, gitnexusCmd, loadSavedConfig, resolveGitNexusCmd, runAugment, setAugmentTimeout, setGitnexusCmd, spawnEnv, updateSpawnEnv } from './gitnexus';
 import { mcpClient } from './mcp-client';
